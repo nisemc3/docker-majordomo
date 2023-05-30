@@ -17,23 +17,33 @@ help:
 
 .DEFAULT_GOAL := help
 
-init: build up
-install: build up
+run_portainer:
+	@docker volume create portainer_data 
+	@docker run -d -p 8000:8000 -p 9000:9000 -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer
 
-clone_code: ## git clone code
-	@ mkdir -p ./app
-	@ mkdir -p ./db-data
-	@ git clone https://github.com/sergejey/majordomo.git ./app
-pull: ## git pull cod
-	@ cd ./app | git pull
-build: ## Build docker containers
+init: ## set variables
+	@ sed -i 's/MYSQL_ROOT_PASSWORD_conf/${MYSQL_ROOT_PASSWORD}/' docker-compose.yml
+	@ sed -i 's/MYSQL_USER_conf/${MYSQL_USER}/' docker-compose.yml
+	@ sed -i 's/MYSQL_PASSWORD_conf/${MYSQL_PASSWORD}/' docker-compose.yml
+	
+init_back: ##set variables back
+	@ sed -i 's/${MYSQL_ROOT_PASSWORD}/MYSQL_ROOT_PASSWORD_conf/' docker-compose.yml
+	@ sed -i 's/${MYSQL_USER}/MYSQL_USER_conf/' docker-compose.yml
+	@ sed -i 's/${MYSQL_PASSWORD}/MYSQL_PASSWORD_conf/' docker-compose.yml
+	
+build_up: init ## Build docker containers
 	@$(call docker_compose, build)
-up: ## Up docker containers
 	@$(call docker_compose, up -d)
+	@$(call docker_compose, pause majordomo)
+	sleep .5
+	@$(call docker_compose, exec mysql mysqladmin -u$(MYSQL_USER) -p$(MYSQL_ROOT_PASSWORD) drop $(MYSQL_DATABASE))
+	@$(call docker_compose, exec mysql mysqladmin -u$(MYSQL_USER) -p$(MYSQL_ROOT_PASSWORD) create $(MYSQL_DATABASE))
+	@ cat ./app/db_terminal.sql | docker-compose exec -T mysql mysql -u$(MYSQL_USER) -p$(MYSQL_PASSWORD) $(MYSQL_DATABASE)	
+	@$(call docker_compose, unpause majordomo)
 
 stop: ## Stop docker containers
 	@$(call docker_compose, stop)
-
+	
 restart: ## Restart docker containers
 	@$(call docker_compose, restart)
 
@@ -48,11 +58,14 @@ exec-app: ## Enter to app container
 
 app-owner-user: ## Set file owner to current user for app
 	@ docker-compose exec -T majordomo chown www-data:www-data -R /var/www/html && chmod -R 777 /var/www/html
+	
 init-db:
-	@ sleep 10s
-	@$(call docker_compose, exec mysql mysqladmin -p$(MYSQL_ROOT_PASSWORD) drop $(MYSQL_DATABASE))
-	@$(call docker_compose, exec mysql mysqladmin -p$(MYSQL_ROOT_PASSWORD) create $(MYSQL_DATABASE))
-	@ cat ./app/db_terminal.sql | docker-compose exec -T mysql mysql -u$(MYSQL_USER) -p$(MYSQL_PASSWORD) $(MYSQL_DATABASE)
+	@$(call docker_compose, pause majordomo)
+	sleep .5
+	@$(call docker_compose, exec mysql mysqladmin -u$(MYSQL_USER) -p$(MYSQL_ROOT_PASSWORD) drop $(MYSQL_DATABASE))
+	@$(call docker_compose, exec mysql mysqladmin -u$(MYSQL_USER) -p$(MYSQL_ROOT_PASSWORD) create $(MYSQL_DATABASE))
+	@ cat ./app/db_terminal.sql | docker-compose exec -T mysql mysql -u$(MYSQL_USER) -p$(MYSQL_PASSWORD) $(MYSQL_DATABASE)	
+	@$(call docker_compose, unpause majordomo)
 
 %:
     @:

@@ -1,24 +1,70 @@
-version: '2'
+version: '3'
 services:
+
   majordomo:
     build: ./app-conf/debian/
     volumes:
       - './app:/var/www/html'
-    network_mode: "host"
-    restart: always
+      - './zigbee2mqtt/log:/opt/zigbee2mqtt/data/log'
+    ports:
+      - '80:80'
+      - '8001:8001'
+    networks:
+      majordomo:
+        ipv4_address: 172.1.0.20
+    links:
+      - mysql
+      
   mysql:
-    image: linuxserver/mariadb
+    build: ./app-conf/mysql
     ports:
       - '3306:3306'
-    volumes:
-      - ./db-data:/var/lib/mysql
-      - ./app-conf/debian/mysql:/etc/mysql
     environment:
-      - MYSQL_HOST=${MYSQL_HOST}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-    command:
-      mysqld --innodb-flush-method=littlesync --innodb-use-native-aio=OFF
+      - MYSQL_HOST=mysql
+      - MYSQL_ROOT_PASSWORD=117321
+      - MYSQL_DATABASE=db_terminal
+      - MYSQL_USER=niskma
+      - MYSQL_PASSWORD=117321
+    networks:
+      majordomo:
+           ipv4_address: 172.1.0.21
     restart: always
+    
+  phpmyadmin:
+    build: ./app-conf/phpmyadmin
+    container_name: phpmyadmin
+    networks:
+      majordomo:
+        ipv4_address: 172.1.0.22
+    environment:
+        - PMA_HOST=172.1.0.21
+        - PMA_PORT=3306
+    restart: always
+    ports:
+        - 8085:80
+    depends_on:
+          - mysql
+          
+  mosquitto:
+    container_name: mosquitto
+    image: eclipse-mosquitto:latest
+    restart: always
+    networks:
+      majordomo:
+        ipv4_address: 172.1.0.23
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    ports:
+      - 1883:1883
+    user: '1000:1000'
+    environment:
+      - MQTT_BROKER_URL=mqtt://mosquitto
+          
+networks:
+  majordomo:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.1.0.0/17

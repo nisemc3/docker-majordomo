@@ -1,0 +1,15 @@
+.idea*
+*~
+modules/*/installed
+reboot
+
+*.phpproj
+*.bak
+*.sln
+*.suo
+*.phpproj.user
+.vs/
+backup/
+/cms/debmes/*
+/cms/cached/*
+.uploadrc
